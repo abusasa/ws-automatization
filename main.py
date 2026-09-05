@@ -16,19 +16,13 @@ logging.basicConfig(
 logger = logging.getLogger("MainControl")
 
 running = True
-
-
 def signal_handler(sig, frame):
     global running
     logger.info("Завершение...")
     running = False
-
-
 def load_json(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
         return json.load(f)
-
-
 def main():
     global running
     signal.signal(signal.SIGINT, signal_handler)
@@ -41,8 +35,6 @@ def main():
         logger.error("Нет сообщений в templates.json")
         return 1
 
-    # Опциональные настройки надёжности. Если их нет в config.json -
-    # используются безопасные значения по умолчанию (обратная совместимость).
     max_consecutive_failures = config.get('max_consecutive_failures', 5)
     page_load_timeout = config.get('page_load_timeout_seconds', 60)
 
@@ -99,10 +91,6 @@ def main():
             phone = contact[0]
             text = random.choice(messages)
 
-            # Статус 'sending' ставится ДО фактической отправки: если процесс
-            # упадёт прямо во время клика по кнопке "Отправить", контакт не
-            # попадёт обратно в 'pending' при следующем запуске и не будет
-            # отправлен повторно вслепую (см. Database.flag_interrupted).
             db.mark_status(phone, 'sending')
             logger.info(f"Отправка: {phone}")
 
@@ -144,11 +132,6 @@ def main():
                 time.sleep(1)
 
     finally:
-        # Гарантируем закрытие браузера и БД при ЛЮБОМ выходе из try -
-        # штатном, по break, по return или по необработанному исключению.
-        # Раньше sender.close() вызывался только после нормального завершения
-        # цикла, и при любой непойманной ошибке Chrome оставался висеть как
-        # процесс-сирота, а соединение с БД не закрывалось.
         if sender:
             logger.info("Закрытие браузера...")
             sender.close()

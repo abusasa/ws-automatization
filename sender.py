@@ -9,47 +9,31 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
-
-
 class WhatsAppSender:
     def __init__(self, profile_path, page_load_timeout=60):
         self.logger = logging.getLogger("WhatsAppSender")
         self.driver = None
-
         chrome_options = Options()
-        # ВАЖНО: аргументу нужен префикс "--". Без него Chrome флаг просто
-        # игнорирует, профиль не применяется, и сессия входа в WhatsApp
-        # НЕ сохраняется между запусками (в этой версии кода снова было
-        # "user-data-dir=..." без "--" - это ломает восстановление после
-        # перезапуска/перезагрузки, заявленное в readme).
         chrome_options.add_argument(f"--user-data-dir={profile_path}")
         chrome_options.add_argument("--disable-infobars")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--no-sandbox")
-
         self.logger.info("Запуск Chrome")
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-
-        # Ограничиваем время загрузки страницы: без этого driver.get() может
-        # заблокироваться на неопределённое время при проблемах с сетью -
-        # это реальный сценарий "зависания" всего процесса.
         self.driver.set_page_load_timeout(page_load_timeout)
         self.wait = WebDriverWait(self.driver, 30)
-
     def wait_for_login(self):
         try:
             self.driver.get("https://web.whatsapp.com/")
         except TimeoutException:
             self.logger.error("Таймаут загрузки web.whatsapp.com")
             raise
-
         self.logger.info("Ожидание входа в WhatsApp Web")
         WebDriverWait(self.driver, 300).until(
             EC.presence_of_element_located(
                 (By.XPATH, '//div[@contenteditable="true"][@data-tab="3"] | //canvas[@aria-label="Scan me!"]')
             )
         )
-
         try:
             WebDriverWait(self.driver, 300).until(
                 EC.presence_of_element_located((By.XPATH, '//div[@id="pane-side"]'))
@@ -58,22 +42,7 @@ class WhatsAppSender:
         except Exception:
             self.logger.error("Время входа истекло")
             raise
-
     def _handle_continue_to_chat(self):
-        """
-        По ссылке send?phone=...  WhatsApp Web нередко показывает
-        промежуточный экран с кнопкой "Continue to Chat" / "Продолжить в чат"
-        (особенно для номеров, с которыми на этом аккаунте ещё не было
-        переписки - то есть практически для всех контактов из холодной базы).
-        Без клика по этой кнопке чат не откроется, и ожидание кнопки отправки
-        ниже всегда закончится таймаутом, а контакт будет ошибочно помечен
-        как failed.
-
-        ПРИМЕЧАНИЕ: разметка/текст этой кнопки могут отличаться в зависимости
-        от версии и языка интерфейса WhatsApp Web - селектор ниже рабочее
-        приближение, а не гарантированно вечная конструкция. Рекомендуется
-        проверить на 1-2 тестовых номерах перед массовой рассылкой.
-        """
         continue_xpath = (
             '//a[contains(@href, "send") and '
             '(contains(., "Continue to Chat") or contains(., "Продолжить"))] '
@@ -88,7 +57,6 @@ class WhatsAppSender:
             except Exception:
                 return False
         return False
-
     def send_message(self, phone, text):
         try:
             encoded_text = urllib.parse.quote(text)
@@ -99,14 +67,12 @@ class WhatsAppSender:
             except TimeoutException:
                 self.logger.warning(f"Таймаут загрузки страницы для {phone}")
                 return False
-
             send_btn_xpath = '//span[@data-icon="send"]'
             invalid_phone_xpath = (
                 '//div[contains(text(), "is invalid") '
                 'or contains(text(), "не зарегистрирован") '
                 'or contains(text(), "недействителен")]'
             )
-
             clicked_continue = False
             start_time = time.time()
             while True:
@@ -131,7 +97,6 @@ class WhatsAppSender:
                 if invalid_alerts:
                     self.logger.warning(f"Номер не зарегистрирован: {phone}")
                     return False
-
                 time.sleep(1)
 
         except WebDriverException as e:
@@ -140,7 +105,6 @@ class WhatsAppSender:
         except Exception as e:
             self.logger.error(f"Ошибка отправки на {phone}: {str(e)}")
             return False
-
     def close(self):
         if self.driver:
             try:
