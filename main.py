@@ -10,7 +10,7 @@ from sender import WhatsAppSender
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(message)s',
     handlers=[logging.FileHandler("whatsapp_bot.log", encoding='utf-8'), logging.StreamHandler()]
 )
 logger = logging.getLogger("MainControl")
@@ -18,7 +18,7 @@ logger = logging.getLogger("MainControl")
 running = True
 def signal_handler(sig, frame):
     global running
-    logger.info("Завершение...")
+    logger.info("завершаем работу...")
     running = False
 def load_json(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -32,7 +32,7 @@ def main():
     templates = load_json('templates.json')
     messages = [text for text in templates.values() if text]
     if not messages:
-        logger.error("Нет сообщений в templates.json")
+        logger.error("в templates.json нет сообщений")
         return 1
 
     max_consecutive_failures = config.get('max_consecutive_failures', 5)
@@ -45,34 +45,31 @@ def main():
     try:
         db.load_from_csv('contats.csv')
         stats = db.get_stats()
-        logger.info(f"База: {stats}")
+        logger.info(f"база: {stats}")
 
         interrupted = db.flag_interrupted()
         if interrupted:
             logger.warning(
-                f"Обнаружено {len(interrupted)} контакт(ов) со статусом 'sending' от "
-                f"прерванного предыдущего запуска (аварийное завершение/kill/сбой "
-                f"питания). Нет способа достоверно узнать, было ли сообщение "
-                f"фактически доставлено, поэтому они помечены как 'interrupted' и "
-                f"НЕ будут отправлены повторно автоматически. Проверьте вручную: {interrupted}"
+                f"после сбоя остались незавершённые номера: {interrupted}. "
+                f"не отправляем их повторно автоматически"
             )
 
         start_time = db.get_start_time()
         max_duration = config['max_execution_days'] * 24 * 3600
 
         if time.time() - start_time > max_duration:
-            logger.error("Срок работы истек")
+            logger.error("срок работы истёк")
             return 0
 
         if not db.get_pending_contact():
-            logger.info("Очередь пуста")
+            logger.info("очередь пуста")
             return 0
 
         try:
             sender = WhatsAppSender(config['browser_profile_path'], page_load_timeout=page_load_timeout)
             sender.wait_for_login()
         except Exception:
-            logger.exception("Не удалось запустить браузер или выполнить вход в WhatsApp Web")
+            logger.exception("не удалось открыть браузер или войти в whatsapp web")
             return 1
 
         consecutive_failures = 0
@@ -80,42 +77,39 @@ def main():
         while running:
             elapsed = time.time() - start_time
             if elapsed > max_duration:
-                logger.info("Лимит времени работы достигнут")
+                logger.info("лимит времени работы достигнут")
                 break
 
             contact = db.get_pending_contact()
             if not contact:
-                logger.info("Очередь обработана")
+                logger.info("очередь обработана")
                 break
 
             phone = contact[0]
             text = random.choice(messages)
 
             db.mark_status(phone, 'sending')
-            logger.info(f"Отправка: {phone}")
+            logger.info(f"отправляем: {phone}")
 
             try:
                 success = sender.send_message(phone, text)
             except Exception:
-                logger.exception(f"Неожиданная ошибка при отправке {phone}")
+                logger.exception(f"ошибка отправки {phone}")
                 success = False
 
             if success:
                 db.mark_status(phone, 'sent')
                 consecutive_failures = 0
-                logger.info(f"Успешно отправлено: {phone}")
+                logger.info(f"отправлено: {phone}")
             else:
                 db.mark_status(phone, 'failed')
                 consecutive_failures += 1
-                logger.warning(f"Не удалось отправить: {phone} (подряд неудач: {consecutive_failures})")
+                logger.warning(f"не отправилось: {phone} (ошибок подряд: {consecutive_failures})")
 
                 if consecutive_failures >= max_consecutive_failures:
                     logger.critical(
-                        f"{consecutive_failures} неудач(и) подряд. Вероятно, изменился "
-                        f"интерфейс WhatsApp Web, слетела сессия входа или пропал "
-                        f"интернет. Останавливаемся, чтобы не потратить впустую весь "
-                        f"5-дневный лимит на заведомо неудачные попытки. Проверьте лог "
-                        f"и браузер вручную, затем перезапустите."
+                        f"{consecutive_failures} ошибок подряд. останавливаемся... "
+                        f"проверьте интернет и войдите в whatsapp web заново"
                     )
                     exit_code = 1
                     break
@@ -125,7 +119,7 @@ def main():
             jitter_val = base_delay * jitter_pct
             delay = base_delay + random.uniform(-jitter_val, jitter_val)
 
-            logger.info(f"Пауза: {timedelta(seconds=int(delay))}")
+            logger.info(f"ждём: {timedelta(seconds=int(delay))}")
 
             end_wait = time.time() + delay
             while time.time() < end_wait and running:
@@ -133,10 +127,10 @@ def main():
 
     finally:
         if sender:
-            logger.info("Закрытие браузера...")
+            logger.info("закрываем браузер...")
             sender.close()
         db.close()
-        logger.info("Готово")
+        logger.info("готово")
 
     return exit_code
 

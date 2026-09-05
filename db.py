@@ -31,20 +31,20 @@ class Database:
         return re.sub(r'\D', '', raw_phone or '')
     def load_from_csv(self, csv_path):
         if not os.path.exists(csv_path):
-            raise FileNotFoundError(f"Файл {csv_path} не найден.")
+            raise FileNotFoundError(f"файл {csv_path} не найден")
 
         cursor = self.conn.cursor()
         with open(csv_path, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f)
             if reader.fieldnames != ['phone']:
-                raise ValueError("CSV должен содержать один столбец: phone")
+                raise ValueError("в csv нужен один столбец: phone")
 
             loaded = 0
             skipped = 0
             for i, row in enumerate(reader, start=2):
                 phone = self._normalize_phone(row.get('phone'))
                 if not phone:
-                    logger.warning(f"Строка {i} в CSV пропущена (пустой/некорректный phone): {row}")
+                    logger.warning(f"строка {i} пропущена: пустой или неверный phone")
                     skipped += 1
                     continue
                 cursor.execute('''
@@ -53,7 +53,7 @@ class Database:
                 ''', (phone,))
                 loaded += 1
         self.conn.commit()
-        logger.info(f"Загрузка CSV завершена: обработано {loaded}, пропущено {skipped}")
+        logger.info(f"csv загружен: обработано {loaded}, пропущено {skipped}")
     def get_pending_contact(self):
         cursor = self.conn.cursor()
         cursor.execute("SELECT phone FROM contacts WHERE status = 'pending' LIMIT 1")

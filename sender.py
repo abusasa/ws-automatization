@@ -18,7 +18,7 @@ class WhatsAppSender:
         chrome_options.add_argument("--disable-infobars")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--no-sandbox")
-        self.logger.info("Запуск Chrome")
+        self.logger.info("запускаем chrome")
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
         self.driver.set_page_load_timeout(page_load_timeout)
         self.wait = WebDriverWait(self.driver, 30)
@@ -26,9 +26,9 @@ class WhatsAppSender:
         try:
             self.driver.get("https://web.whatsapp.com/")
         except TimeoutException:
-            self.logger.error("Таймаут загрузки web.whatsapp.com")
+            self.logger.error("страница whatsapp не загрузилась вовремя")
             raise
-        self.logger.info("Ожидание входа в WhatsApp Web")
+        self.logger.info("ждём вход в whatsapp web...")
         WebDriverWait(self.driver, 300).until(
             EC.presence_of_element_located(
                 (By.XPATH, '//div[@contenteditable="true"][@data-tab="3"] | //canvas[@aria-label="Scan me!"]')
@@ -38,9 +38,9 @@ class WhatsAppSender:
             WebDriverWait(self.driver, 300).until(
                 EC.presence_of_element_located((By.XPATH, '//div[@id="pane-side"]'))
             )
-            self.logger.info("Вход выполнен")
+            self.logger.info("вход выполнен")
         except Exception:
-            self.logger.error("Время входа истекло")
+            self.logger.error("время входа истекло")
             raise
     def _handle_continue_to_chat(self):
         continue_xpath = (
@@ -65,7 +65,7 @@ class WhatsAppSender:
             try:
                 self.driver.get(url)
             except TimeoutException:
-                self.logger.warning(f"Таймаут загрузки страницы для {phone}")
+                self.logger.warning(f"страница для {phone} не загрузилась вовремя")
                 return False
             send_btn_xpath = '//span[@data-icon="send"]'
             invalid_phone_xpath = (
@@ -77,7 +77,7 @@ class WhatsAppSender:
             start_time = time.time()
             while True:
                 if time.time() - start_time > 45:
-                    self.logger.warning(f"Таймаут загрузки чата для {phone}")
+                    self.logger.warning(f"чат для {phone} не загрузился вовремя")
                     return False
 
                 if not clicked_continue:
@@ -95,19 +95,19 @@ class WhatsAppSender:
 
                 invalid_alerts = self.driver.find_elements(By.XPATH, invalid_phone_xpath)
                 if invalid_alerts:
-                    self.logger.warning(f"Номер не зарегистрирован: {phone}")
+                    self.logger.warning(f"номер не зарегистрирован: {phone}")
                     return False
                 time.sleep(1)
 
         except WebDriverException as e:
-            self.logger.error(f"Ошибка WebDriver при отправке на {phone}: {str(e)}")
+            self.logger.error(f"ошибка webdriver при отправке на {phone}: {str(e)}")
             return False
         except Exception as e:
-            self.logger.error(f"Ошибка отправки на {phone}: {str(e)}")
+            self.logger.error(f"ошибка отправки на {phone}: {str(e)}")
             return False
     def close(self):
         if self.driver:
             try:
                 self.driver.quit()
             except Exception:
-                self.logger.warning("Ошибка при закрытии браузера (возможно, он уже был закрыт)")
+                self.logger.warning("не удалось закрыть браузер")

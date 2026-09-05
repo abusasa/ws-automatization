@@ -1,13 +1,13 @@
-1. зависимости:
+1. установите зависимости:
 ```text
 pip install -r requirements.txt
 ```
-2. 
+2. заполните `contats.csv`:
 ```csv
 phone
 79991234567
 ```
-3. варианты собщениалардн в `templates.json`:
+3. добавьте 4 сообщения в `templates.json` и запустите:
 ```text
 python main.py
 ```
