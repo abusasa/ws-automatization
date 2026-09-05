@@ -1,0 +1,6 @@
+{
+  "max_execution_days": 5,
+  "base_delay_seconds": 800,
+  "random_jitter_percent": 20,
+  "browser_profile_path": "./chrome_profile"
+}
