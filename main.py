@@ -33,6 +33,10 @@ def main():
 
     config = load_json('config.json')
     templates = load_json('templates.json')
+    messages = [text for text in templates.values() if text]
+    if not messages:
+        logger.error("Нет сообщений в templates.json")
+        return
     db = Database()
 
     db.load_from_csv('contats.csv')
@@ -69,16 +73,9 @@ def main():
             logger.info("Очередь обработана")
             break
 
-        phone, name, template_id = contact
-        
-        raw_text = templates.get(template_id)
-        if not raw_text:
-            logger.error(f"Шаблон {template_id} не найден: {phone}")
-            db.mark_status(phone, 'failed_no_template')
-            continue
-
-        text = raw_text.replace("{name}", name)
-        logger.info(f"Отправка: {phone} ({template_id})")
+        phone = contact[0]
+        text = random.choice(messages)
+        logger.info(f"Отправка: {phone}")
 
         success = sender.send_message(phone, text)
         if success:

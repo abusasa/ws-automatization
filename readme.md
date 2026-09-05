@@ -4,14 +4,14 @@
 pip install -r requirements.txt
 ```
 
-2. Заполнить `contats.csv`:
+2. Заполнить `contats.csv` одним столбцом:
 
 ```csv
-phone,name,template_id
-79991234567,Имя,t1
+phone
+79991234567
 ```
 
-3. Добавить текст шаблона в `templates.json` и запустить:
+3. Заполнить четыре варианта в `templates.json` и запустить:
 
 ```text
 python main.py

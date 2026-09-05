@@ -13,8 +13,6 @@ class Database:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS contacts (
                 phone TEXT PRIMARY KEY,
-                name TEXT,
-                template_id TEXT,
                 status TEXT DEFAULT 'pending',
                 sent_at TIMESTAMP
             )
@@ -32,24 +30,24 @@ class Database:
             raise FileNotFoundError(f"Файл {csv_path} не найден.")
 
         cursor = self.conn.cursor()
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f)
-            required_fields = {'phone', 'template_id'}
-            missing_fields = required_fields - set(reader.fieldnames or [])
-            if missing_fields:
-                fields = ', '.join(sorted(missing_fields))
-                raise ValueError(f"В CSV отсутствуют столбцы: {fields}")
+            if reader.fieldnames != ['phone']:
+                raise ValueError("CSV должен содержать один столбец: phone")
 
             for row in reader:
+                phone = row['phone'].strip()
+                if not phone:
+                    continue
                 cursor.execute('''
-                    INSERT OR IGNORE INTO contacts (phone, name, template_id, status)
-                    VALUES (?, ?, ?, 'pending')
-                ''', (row['phone'], row.get('name', ''), row['template_id']))
+                    INSERT OR IGNORE INTO contacts (phone, status)
+                    VALUES (?, 'pending')
+                ''', (phone,))
         self.conn.commit()
 
     def get_pending_contact(self):
         cursor = self.conn.cursor()
-        cursor.execute("SELECT phone, name, template_id FROM contacts WHERE status = 'pending' LIMIT 1")
+        cursor.execute("SELECT phone FROM contacts WHERE status = 'pending' LIMIT 1")
         return cursor.fetchone()
 
     def mark_status(self, phone, status):
