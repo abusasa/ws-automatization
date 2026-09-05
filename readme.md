@@ -1,13 +1,18 @@
-1. установите зависимости:
+1. клонирование
+```text
+git clone https://github.com/abusasa/ws-automatization.git
+cd .\ws-automatization\
+```
+2. установите зависимости:
 ```text
 pip install -r requirements.txt
 ```
-2. заполните `contats.csv`:
+3. заполните `contats.csv`:
 ```csv
 phone
 79991234567
 ```
-3. добавьте 4 сообщения в `templates.json` и запустите:
+4. добавьте 4 сообщения в `templates.json` и запустите:
 ```text
 python main.py
 ```
