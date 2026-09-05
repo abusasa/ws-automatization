@@ -4,14 +4,17 @@ import random
 import logging
 import signal
 import sys
+from pathlib import Path
 from datetime import timedelta
 from db import Database
 from sender import WhatsAppSender
 
+BASE_DIR = Path(__file__).resolve().parent
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(message)s',
-    handlers=[logging.FileHandler("whatsapp_bot.log", encoding='utf-8'), logging.StreamHandler()]
+    handlers=[logging.FileHandler(BASE_DIR / "whatsapp_bot.log", encoding='utf-8'), logging.StreamHandler()]
 )
 logger = logging.getLogger("MainControl")
 
@@ -28,8 +31,8 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    config = load_json('config.json')
-    templates = load_json('templates.json')
+    config = load_json(BASE_DIR / 'config.json')
+    templates = load_json(BASE_DIR / 'templates.json')
     messages = [text for text in templates.values() if text]
     if not messages:
         logger.error("в templates.json нет сообщений")
@@ -43,7 +46,7 @@ def main():
     exit_code = 0
 
     try:
-        db.load_from_csv('contats.csv')
+        db.load_from_csv(BASE_DIR / 'contats.csv')
         stats = db.get_stats()
         logger.info(f"база: {stats}")
 
@@ -66,7 +69,8 @@ def main():
             return 0
 
         try:
-            sender = WhatsAppSender(config['browser_profile_path'], page_load_timeout=page_load_timeout)
+            profile_path = BASE_DIR / config['browser_profile_path']
+            sender = WhatsAppSender(profile_path, page_load_timeout=page_load_timeout)
             sender.wait_for_login()
         except Exception:
             logger.exception("не удалось открыть браузер или войти в whatsapp web")

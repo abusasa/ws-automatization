@@ -1,6 +1,7 @@
 import urllib.parse
 import time
 import logging
+from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -18,8 +19,14 @@ class WhatsAppSender:
         chrome_options.add_argument("--disable-infobars")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--no-sandbox")
-        self.logger.info("запускаем chrome")
-        self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+        driver_path = Path(ChromeDriverManager().install())
+        if driver_path.name.lower() != "chromedriver.exe":
+            driver_files = list(driver_path.parent.rglob("chromedriver.exe"))
+            if not driver_files:
+                raise FileNotFoundError("chromedriver.exe не найден")
+            driver_path = driver_files[0]
+        self.logger.info("драйвер chrome готов")
+        self.driver = webdriver.Chrome(service=Service(driver_path), options=chrome_options)
         self.driver.set_page_load_timeout(page_load_timeout)
         self.wait = WebDriverWait(self.driver, 30)
     def wait_for_login(self):
@@ -29,25 +36,27 @@ class WhatsAppSender:
             self.logger.error("страница whatsapp не загрузилась вовремя")
             raise
         self.logger.info("ждём вход в whatsapp web...")
-        WebDriverWait(self.driver, 300).until(
-            EC.presence_of_element_located(
-                (By.XPATH, '//div[@contenteditable="true"][@data-tab="3"] | //canvas[@aria-label="Scan me!"]')
-            )
-        )
         try:
             WebDriverWait(self.driver, 300).until(
-                EC.presence_of_element_located((By.XPATH, '//div[@id="pane-side"]'))
+                EC.presence_of_element_located(
+                    (By.XPATH, '//div[@id="pane-side"] | '
+                     '//*[@data-testid="chat-list"] | '
+                     '//div[@aria-label="Chat list"]')
+                )
             )
             self.logger.info("вход выполнен")
-        except Exception:
+        except TimeoutException:
             self.logger.error("время входа истекло")
             raise
     def _handle_continue_to_chat(self):
+        button_text = 'translate(., "ABCDEFGHIJKLMNOPQRSTUVWXYZАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ", "abcdefghijklmnopqrstuvwxyzабвгдеёжзийклмнопрстуфхцчшщъыьэюя")'
         continue_xpath = (
             '//a[contains(@href, "send") and '
-            '(contains(., "Continue to Chat") or contains(., "Продолжить"))] '
+            f'contains({button_text}, "continue to chat") or '
+            f'contains({button_text}, "продолжить")] '
             '| //div[@role="button"]'
-            '[contains(., "Continue to Chat") or contains(., "Продолжить")]'
+            f'[contains({button_text}, "continue to chat") or '
+            f'contains({button_text}, "продолжить")]'
         )
         buttons = self.driver.find_elements(By.XPATH, continue_xpath)
         if buttons:
@@ -67,7 +76,11 @@ class WhatsAppSender:
             except TimeoutException:
                 self.logger.warning(f"страница для {phone} не загрузилась вовремя")
                 return False
-            send_btn_xpath = '//span[@data-icon="send"]'
+            send_btn_xpath = (
+                '//button[@aria-label="Send" or @aria-label="Отправить" or '
+                '@title="Send" or @title="Отправить"] | '
+                '//*[@data-testid="send"] | //span[@data-icon="send"]'
+            )
             invalid_phone_xpath = (
                 '//div[contains(text(), "is invalid") '
                 'or contains(text(), "не зарегистрирован") '
@@ -88,10 +101,14 @@ class WhatsAppSender:
 
                 send_btns = self.driver.find_elements(By.XPATH, send_btn_xpath)
                 if send_btns:
-                    time.sleep(2)
-                    send_btns[0].click()
-                    time.sleep(3)
-                    return True
+                    for send_btn in send_btns:
+                        try:
+                            if send_btn.is_displayed() and send_btn.is_enabled():
+                                send_btn.click()
+                                time.sleep(3)
+                                return True
+                        except WebDriverException:
+                            continue
 
                 invalid_alerts = self.driver.find_elements(By.XPATH, invalid_phone_xpath)
                 if invalid_alerts:
