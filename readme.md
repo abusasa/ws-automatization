@@ -1,18 +1,12 @@
-1. Установить зависимости:
-
+1. зависимости:
 ```text
 pip install -r requirements.txt
 ```
-
-2. Заполнить `contats.csv` одним столбцом:
-
-```csv
+2. ```csv
 phone
 79991234567
 ```
-
-3. Заполнить четыре варианта в `templates.json` и запустить:
-
+3. варианты собщениалардн в `templates.json`:
 ```text
 python main.py
 ```

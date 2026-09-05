@@ -19,7 +19,7 @@ running = True
 
 def signal_handler(sig, frame):
     global running
-    logger.info("инициализация...")
+    logger.info("Завершение...")
     running = False
 
 def load_json(filepath):
