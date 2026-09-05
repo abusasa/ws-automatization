@@ -1,7 +1,12 @@
 import sqlite3
 import csv
 import os
+import re
 import time
+import logging
+
+logger = logging.getLogger("Database")
+
 
 class Database:
     def __init__(self, db_name="whatsapp_state.db"):
@@ -25,6 +30,15 @@ class Database:
         ''')
         self.conn.commit()
 
+    @staticmethod
+    def _normalize_phone(raw_phone):
+        """
+        Оставляем только цифры. WhatsApp click-to-chat ожидает номер с кодом
+        страны без '+', пробелов и тире - данные из Excel/CSV часто приходят
+        с этим мусором и без нормализации просто не находят чат.
+        """
+        return re.sub(r'\D', '', raw_phone or '')
+
     def load_from_csv(self, csv_path):
         if not os.path.exists(csv_path):
             raise FileNotFoundError(f"Файл {csv_path} не найден.")
@@ -35,15 +49,25 @@ class Database:
             if reader.fieldnames != ['phone']:
                 raise ValueError("CSV должен содержать один столбец: phone")
 
-            for row in reader:
-                phone = row['phone'].strip()
+            loaded = 0
+            skipped = 0
+            for i, row in enumerate(reader, start=2):  # строка 1 - заголовок
+                # row.get('phone') может быть None, если в строке меньше
+                # колонок, чем в заголовке (битая строка из Excel и т.п.).
+                # Раньше row['phone'].strip() падал с AttributeError и
+                # обрушивал загрузку ВСЕГО файла из-за одной кривой строки.
+                phone = self._normalize_phone(row.get('phone'))
                 if not phone:
+                    logger.warning(f"Строка {i} в CSV пропущена (пустой/некорректный phone): {row}")
+                    skipped += 1
                     continue
                 cursor.execute('''
                     INSERT OR IGNORE INTO contacts (phone, status)
                     VALUES (?, 'pending')
                 ''', (phone,))
+                loaded += 1
         self.conn.commit()
+        logger.info(f"Загрузка CSV завершена: обработано {loaded}, пропущено {skipped}")
 
     def get_pending_contact(self):
         cursor = self.conn.cursor()
@@ -56,6 +80,27 @@ class Database:
             UPDATE contacts SET status = ?, sent_at = CURRENT_TIMESTAMP WHERE phone = ?
         ''', (status, phone))
         self.conn.commit()
+
+    def flag_interrupted(self):
+        """
+        Контакты, оставшиеся в статусе 'sending' после предыдущего запуска, -
+        это те, чья отправка была прервана аварийно (kill/crash/отключение
+        питания) прямо в момент клика по кнопке отправки. WhatsApp Web не даёт
+        API подтверждения доставки, поэтому нельзя достоверно узнать, ушло
+        сообщение или нет.
+
+        Чтобы не нарушить требование "строгой уникальности отправки", такие
+        контакты НЕ возвращаются в 'pending' (что привело бы к слепой повторной
+        отправке), а помечаются как 'interrupted' для ручной проверки.
+        get_pending_contact() их не увидит, так как выбирает только 'pending'.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT phone FROM contacts WHERE status = 'sending'")
+        stuck = [row[0] for row in cursor.fetchall()]
+        if stuck:
+            cursor.execute("UPDATE contacts SET status = 'interrupted' WHERE status = 'sending'")
+            self.conn.commit()
+        return stuck
 
     def get_start_time(self):
         cursor = self.conn.cursor()
@@ -73,3 +118,6 @@ class Database:
         cursor = self.conn.cursor()
         cursor.execute("SELECT status, COUNT(*) FROM contacts GROUP BY status")
         return dict(cursor.fetchall())
+
+    def close(self):
+        self.conn.close()
