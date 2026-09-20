@@ -5,7 +5,7 @@ import logging
 import signal
 import sys
 from pathlib import Path
-from datetime import timedelta
+from datetime import datetime, timedelta
 from db import Database
 from sender import WhatsAppSender
 
@@ -25,7 +25,7 @@ def signal_handler(sig, frame):
     running = False
 def load_json(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        return json.load(f, strict=False)
 def main():
     global running
     signal.signal(signal.SIGINT, signal_handler)
@@ -79,6 +79,14 @@ def main():
         consecutive_failures = 0
 
         while running:
+            
+            current_hour = datetime.now().hour
+            if current_hour >= 21 or current_hour < 9:
+                end_night_wait = time.time() + 300
+                while time.time() < end_night_wait and running:
+                    time.sleep(1)
+                continue
+
             elapsed = time.time() - start_time
             if elapsed > max_duration:
                 logger.info("лимит времени работы достигнут")
